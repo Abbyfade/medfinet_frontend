@@ -210,7 +210,7 @@ const IssueVaccine = () => {
         notes: '',
       });
       setTimeout(() => {
-        navigate('/health-worker//vaccination-history');
+        navigate('/health-worker/vaccination-history');
       }, 1500);
 
     } catch (error) {
