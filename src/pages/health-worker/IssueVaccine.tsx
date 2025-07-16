@@ -78,27 +78,8 @@ const IssueVaccine = () => {
     });
   };
 
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-    useEffect(() => {
-  const reconnect = async () => {
-    const accounts = await peraWallet.reconnectSession();
-    if (accounts.length) {
-      setWalletAddress(accounts[0]);
-    }
-  };
+  const walletAddress = JSON.parse(localStorage.getItem('currentHealthWorker')).walletAddress;
 
-  reconnect();
-}, []);
-
-
-    const handleConnectWallet = async () => {
-      try {
-        const accounts = await connectWallet();
-        setWalletAddress(accounts[0]);
-      } catch (err) {
-        console.error('Wallet connect error:', err);
-      }
-    };
 
   // Frontend code
   const signAndSubmit = async (unsignedTxnBase64: string) => {
@@ -140,10 +121,6 @@ const IssueVaccine = () => {
     setIsSubmitting(true);
 
     try {
-      if (!walletAddress) {
-        await handleConnectWallet();
-        return;
-      }
 
       const { data: childData, error: childError } = await supabase
       .from('child_profiles')
