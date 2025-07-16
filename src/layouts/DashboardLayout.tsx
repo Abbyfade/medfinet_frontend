@@ -42,8 +42,8 @@ const DashboardLayout = () => {
     { name: 'Vaccination History', path: '/vaccination-history/all', icon: <FileText className="w-5 h-5 mr-3" /> },
     { name: 'Health Centers', path: '/health-centers', icon: <Map className="w-5 h-5 mr-3" /> },
     { name: 'Education', path: '/education', icon: <Book className="w-5 h-5 mr-3" /> },
-    { name: 'Upload Invoice', path: '/invoice/upload', icon: <DollarSign className="w-5 h-5 mr-3" /> },
-    { name: 'Invoice Marketplace', path: '/invoice/marketplace', icon: <ShoppingBag className="w-5 h-5 mr-3" /> },
+    // { name: 'Upload Invoice', path: '/invoice/upload', icon: <DollarSign className="w-5 h-5 mr-3" /> },
+    // { name: 'Invoice Marketplace', path: '/invoice/marketplace', icon: <ShoppingBag className="w-5 h-5 mr-3" /> },
   ];
 
   return (
