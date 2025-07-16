@@ -1,0 +1,8 @@
+static_sites:
+  - name: MEDFINET
+    buildCommand: npm install && npm run build
+    staticDir: build
+    routes:
+      - type: rewrite
+        source: "/*"
+        destination: "/index.html"
