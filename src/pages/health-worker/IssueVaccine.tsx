@@ -77,7 +77,7 @@ const IssueVaccine = () => {
       isVisible: true,
     });
   };
-
+  peraWallet.reconnectSession();
   const walletAddress = JSON.parse(localStorage.getItem('currentHealthWorker')).walletAddress;
 
 
