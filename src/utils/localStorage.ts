@@ -17,7 +17,7 @@ export interface StoredHealthWorker {
   walletAddress: string;
   clinic: string;
   licenseNumber: string;
-  facility_name?: string;
+  facility_name: string;
   verified: boolean;
   role: 'nurse' | 'doctor' | 'administrator';
   createdAt: string;
@@ -296,6 +296,7 @@ export const initializeSampleData = (): void => {
         name: 'Dr. Sarah Johnson',
         email: 'sarah.johnson@citypediatrics.com',
         walletAddress: 'ALGO7X8Y9Z...ABC123',
+        facility_name: "LASUTH",
         clinic: 'City Pediatrics Medical Center',
         licenseNumber: 'MD-12345-NY',
         verified: true,

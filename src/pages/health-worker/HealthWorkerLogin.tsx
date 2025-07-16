@@ -23,13 +23,22 @@ const HealthWorkerLogin = () => {
     isVisible: false,
   });
 
-  const connectPeraWallet = async () => {
+const connectPeraWallet = async () => {
   setIsConnecting('pera');
 
   try {
-    // 🔗 Connect to Pera Wallet
-    const accounts = await peraWallet.connect();
-    const walletAddress = accounts[0];
+    let walletAddress;
+    
+    // First check if already connected
+    const existingAccounts = await peraWallet.reconnectSession();
+    
+    if (existingAccounts.length > 0) {
+      walletAddress = existingAccounts[0];
+    } else {
+      // If not connected, initiate new connection
+      const accounts = await peraWallet.connect();
+      walletAddress = accounts[0];
+    }
 
     if (!walletAddress) throw new Error('Wallet connection failed');
 
@@ -92,6 +101,7 @@ const HealthWorkerLogin = () => {
         name: 'Dr. Michael Chen',
         email: 'michael.chen@metromedical.com',
         walletAddress: 'ALGO9A8B7C...DEF456',
+        facility_name: "LASUTH",
         clinic: 'Metro Medical Center',
         licenseNumber: 'MD-67890-CA',
         verified: true,
@@ -135,6 +145,7 @@ const HealthWorkerLogin = () => {
         walletAddress: 'ALGO1B2C3D...GHI789',
         clinic: 'Community Health Center',
         licenseNumber: 'MD-11111-TX',
+        facility_name: "LASUTH",
         verified: true,
         role: 'doctor' as const,
       };
