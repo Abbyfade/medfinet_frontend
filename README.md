@@ -4,7 +4,6 @@
 [![Vite](https://img.shields.io/badge/Vite-5+-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3+-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Backend-3FCF8E?logo=supabase&logoColor=white)](https://supabase.io/)
-[![Solana](https://img.shields.io/badge/Solana-Blockchain-9945FF?logo=solana&logoColor=white)](https://solana.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](./LICENSE)
 
 ---
@@ -34,7 +33,7 @@ It bridges healthcare and decentralized finance by enabling secure data manageme
 
 - 🔐 **Digital Immunization Records** – Create, verify, and securely store vaccination data.  
 - 🧾 **Blockchain Verification** – Tamper-proof, verifiable medical records via blockchain.  
-- 👛 **Wallet Authentication** – Login with Solana or Algorand crypto wallets.  
+- 👛 **Wallet Authentication** – Login with Algorand crypto wallets.  
 - 💳 **Payment Integration** – Supports Stripe and wallet-based transactions.  
 - 🗃️ **Supabase Backend** – Reliable storage and authentication.  
 - 🗺️ **Interactive Maps** – Healthcare locations with Mapbox and Leaflet.  
@@ -49,7 +48,7 @@ It bridges healthcare and decentralized finance by enabling secure data manageme
 |-----------|--------------|
 | **Frontend** | React (Vite + TypeScript) |
 | **Styling** | TailwindCSS |
-| **Blockchain** | Solana, Algorand, Ethers.js |
+| **Blockchain** | Algorand |
 | **Backend & Auth** | Supabase |
 | **Payments** | Stripe |
 | **Maps & Visualization** | Leaflet, Mapbox GL |
