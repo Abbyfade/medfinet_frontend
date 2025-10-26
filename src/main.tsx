@@ -1,3 +1,7 @@
+// Polyfill for global variable in browser environment
+if (typeof global === 'undefined') {
+  (window as any).global = window;
+}
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
