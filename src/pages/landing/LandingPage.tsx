@@ -92,7 +92,7 @@ const LandingPage = () => {
                   style={{ transitionDelay: `${1 * 100}ms` }}
                   >
                     Health Finance
-                  </Link>
+              </Link>
               <div className={`transition-all duration-500 ${
                 isVisible ? 'transform scale-100 opacity-100' : 'transform scale-0 opacity-0'
               }`} style={{ transitionDelay: '300ms' }}>
@@ -149,7 +149,7 @@ const LandingPage = () => {
           }`}>
             <div className="bg-white dark:bg-neutral-800 border-t border-neutral-200 dark:border-neutral-700 rounded-b-lg shadow-lg">
               <div className="px-2 pt-2 pb-3 space-y-1">
-                {['Features', 'How It Works', 'Testimonials', 'API'].map((item, index) => (
+                {/* {['Features', 'How It Works', 'Testimonials', 'API'].map((item, index) => (
                   <a 
                     key={item}
                     href={`#${item.toLowerCase().replace(' ', '-')}`} 
@@ -160,7 +160,28 @@ const LandingPage = () => {
                   >
                     {item}
                   </a>
-                ))}
+                ))} */}
+                {['Features', 'How It Works', 'Testimonials', 'API', 'Health Finance'].map((item, index) => {
+                  // Handle the special case for Health Finance
+                  if (item === 'Health Finance') {
+                    return (
+                      <Link
+                        key={item}
+                        to="/healthfinance"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false); // Close mobile menu when navigating
+                        }}
+                        className={`block px-3 py-2 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-300 transform ${
+                          isMobileMenuOpen ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'
+                        }`}
+                        style={{ transitionDelay: `${index * 50}ms` }}
+                      >
+                        {item}
+                      </Link>
+                    );
+                  }
+                })}
+
                 <button
                   onClick={() => setIsSignInModalOpen(true)}
                   className={`block w-full text-left px-3 py-2 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-300 transform ${
