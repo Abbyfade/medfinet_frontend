@@ -1,7 +1,10 @@
 import algosdk from 'algosdk';
 
-const algodClient = new algosdk.Algodv2("a".repeat(64), "http://localhost", 4001); // LocalNet
-
+const algodClient = new algosdk.Algodv2(
+  "a".repeat(64), // no token needed
+  "https://testnet-api.algonode.cloud",
+  443
+);
 const appId = 1004; // Replace with your actual App ID
 
 export async function issueVaccineToBlockchain(mnemonic, formData) {

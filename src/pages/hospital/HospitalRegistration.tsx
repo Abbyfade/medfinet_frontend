@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import ThemeToggle from '../../components/common/ThemeToggle';
+import supabase from '../../services/supabaseClient'
+import peraWalletService from '../../services/peraWalletService';
+
 
 interface HospitalRegistrationData {
   hospitalInfo: {
@@ -59,6 +62,7 @@ const HospitalRegistration = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConnectingWallet, setIsConnectingWallet] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -137,13 +141,16 @@ const HospitalRegistration = () => {
   const connectWallet = async () => {
     setIsConnectingWallet(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (walletAddress) {
+        await peraWalletService.disconnect();
+      } else {
+        const walletAddress  = await peraWalletService.connect();
       
-      const mockWalletAddress = 'ALGO' + Math.random().toString(36).substr(2, 20).toUpperCase();
-      setFormData(prev => ({
-        ...prev,
-        walletAddress: mockWalletAddress,
-      }));
+        setFormData(prev => ({
+          ...prev,
+          walletAddress,
+        }));
+      }
 
       setNotification({
         type: 'success',
@@ -207,21 +214,62 @@ const HospitalRegistration = () => {
     }
 
     setIsSubmitting(true);
-
     try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      const uploadUrls: Record<string, string> = {};
+      for (const [key, file] of Object.entries(formData.documents)) {
+        if (file) {
+          const filePath = `${formData.hospitalInfo.name}_${key}_${Date.now()}_${file.name}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('documents') // or 'hospital_docs' if that’s your actual bucket
+            .upload(filePath, file);
 
-      // Save to localStorage for demo
+          if (uploadError) {
+            console.error('Upload error:', uploadError);
+            throw uploadError;
+          }
+          const { data: publicUrlData } = supabase.storage
+            .from('documents') // same bucket name
+            .getPublicUrl(uploadData.path);
+
+          uploadUrls[key] = publicUrlData.publicUrl;
+        }
+      }
+
+
       const hospitalData = {
-        id: `hospital_${Date.now()}`,
-        ...formData,
-        registrationDate: new Date().toISOString(),
-        status: 'pending',
-        verified: false,
+        name: formData.hospitalInfo.name,
+        type: formData.hospitalInfo.type,
+        email: formData.hospitalInfo.email,
+        phone: formData.hospitalInfo.phone,
+        website: formData.hospitalInfo.website,
+        established_year: formData.hospitalInfo.establishedYear,
+        bed_count: formData.hospitalInfo.bedCount,
+        specialties: formData.hospitalInfo.specialties,
+        street: formData.addressInfo.street,
+        city: formData.addressInfo.city,
+        state: formData.addressInfo.state,
+        zip_code: formData.addressInfo.zipCode,
+        country: formData.addressInfo.country,
+        admin_name: formData.adminInfo.adminName,
+        admin_email: formData.adminInfo.adminEmail,
+        admin_phone: formData.adminInfo.adminPhone,
+        admin_title: formData.adminInfo.adminTitle,
+        wallet_address: formData.walletAddress,
+        registration_date: new Date().toISOString(),
+        status: 'approved',
+        verified: true,
+
+        // include file URLs
+        cac_certificate_url: uploadUrls.insuranceCertificate || null,
+        license_certificate_url: uploadUrls.licenseCertificate || null,
+        admin_id_url: uploadUrls.adminId || null,
       };
 
-      const existingHospitals = JSON.parse(localStorage.getItem('hospitals') || '[]');
-      localStorage.setItem('hospitals', JSON.stringify([...existingHospitals, hospitalData]));
+      const { data, error } = await supabase
+        .from('hospitals')
+        .insert([hospitalData]);
+
+      if (error) throw error;
 
       setNotification({
         type: 'success',
@@ -232,7 +280,8 @@ const HospitalRegistration = () => {
       setTimeout(() => {
         navigate('/');
       }, 2000);
-    } catch (error) {
+    } catch (err: any) {
+      console.error(err);
       setNotification({
         type: 'error',
         message: 'Registration failed. Please try again.',
@@ -241,6 +290,57 @@ const HospitalRegistration = () => {
     } finally {
       setIsSubmitting(false);
     }
+    // try {
+    //   await new Promise(resolve => setTimeout(resolve, 3000));
+    //   const hospitalData = {
+    //     name: formData.hospitalInfo.name,
+    //     type: formData.hospitalInfo.type,
+    //     email: formData.hospitalInfo.email,
+    //     phone: formData.hospitalInfo.phone,
+    //     website: formData.hospitalInfo.website,
+    //     established_year: formData.hospitalInfo.establishedYear,
+    //     bed_count: formData.hospitalInfo.bedCount,
+    //     specialties: formData.hospitalInfo.specialties,
+    //     street: formData.addressInfo.street,
+    //     city: formData.addressInfo.city,
+    //     state: formData.addressInfo.state,
+    //     zip_code: formData.addressInfo.zipCode,
+    //     country: formData.addressInfo.country,
+    //     admin_name: formData.adminInfo.adminName,
+    //     admin_email: formData.adminInfo.adminEmail,
+    //     admin_phone: formData.adminInfo.adminPhone,
+    //     admin_title: formData.adminInfo.adminTitle,
+    //     wallet_address: formData.walletAddress,
+    //     registration_date: new Date().toISOString(),
+    //     status: 'pending',
+    //     verified: false,
+    //   };
+
+    //   const { data, error } = await supabase
+    //     .from('hospitals')
+    //     .insert([hospitalData]);
+
+    //   if (error) throw error;
+
+
+    //   setNotification({
+    //     type: 'success',
+    //     message: 'Hospital registration submitted successfully! You will receive verification status within 24-48 hours.',
+    //     isVisible: true,
+    //   });
+
+    //   setTimeout(() => {
+    //     navigate('/');
+    //   }, 2000);
+    // } catch (error) {
+    //   setNotification({
+    //     type: 'error',
+    //     message: 'Registration failed. Please try again.',
+    //     isVisible: true,
+    //   });
+    // } finally {
+    //   setIsSubmitting(false);
+    // }
   };
 
   const steps = [

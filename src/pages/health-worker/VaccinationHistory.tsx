@@ -1,5 +1,6 @@
-import { useState, useEffect, useContext } from 'react';
-import { Search, Filter, Calendar, User, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Filter, Calendar, User, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { VaccinationRecord } from '../../types/healthWorker';
 import VaccinationRecordCard from '../../components/health-worker/VaccinationRecordCard';
 import supabase from '../../utils/supabaseClient';
@@ -7,27 +8,83 @@ import { useHealthWorker } from '../../contexts/HealthWorkerContext';
 import VaccinationRecordModal from '../../components/health-worker/VaccinationRecordModal';
 
 const VaccinationHistory = () => {
-  const {healthWorker } = useHealthWorker();
+  const navigate = useNavigate();
+  const { healthWorker, isAuthenticated } = useHealthWorker();
   const [records, setRecords] = useState<VaccinationRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<VaccinationRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [selectedRecord, setSelectedRecord] = useState<VaccinationRecord | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoadingRecords, setIsLoadingRecords] = useState(false);
 
+  /**
+   * Check authentication on mount
+   */
   useEffect(() => {
-    if (!healthWorker) return;
+    const checkAuth = async () => {
+      try {
+        setIsLoadingAuth(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          setAuthError('No active session found');
+          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+          return;
+        }
+
+        if (!healthWorker || !isAuthenticated) {
+          setAuthError('Health worker profile not found. Please log in again.');
+          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+          return;
+        }
+
+        setAuthError(null);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setAuthError('Authentication check failed');
+        setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        navigate('/health-worker/login', { replace: true });
+      }
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [healthWorker, isAuthenticated, navigate]);
+
+  /**
+   * Fetch vaccination records once authenticated
+   */
+  useEffect(() => {
+    if (!healthWorker || isLoadingAuth || authError) return;
 
     const fetchVaccinationRecords = async () => {
-      const { data, error } = await supabase
-        .from('vaccinations')
-        .select('*')
-        .eq('health_worker_id', healthWorker.id)
-        .order('date_given', { ascending: false });
+      try {
+        setIsLoadingRecords(true);
+        const { data, error } = await supabase
+          .from('vaccinations')
+          .select('*')
+          .eq('health_worker_id', healthWorker.id)
+          .order('date_given', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching vaccination records:', error.message);
-      } else {
+        if (error) {
+          console.error('Error fetching vaccination records:', error.message);
+          throw error;
+        }
+
         const mappedData = (data || []).map((item) => ({
           id: item.id,
           childIdHash: item.child_id,
@@ -46,12 +103,19 @@ const VaccinationHistory = () => {
 
         setRecords(mappedData);
         setFilteredRecords(mappedData);
+      } catch (error) {
+        console.error('Failed to fetch vaccination records:', error);
+      } finally {
+        setIsLoadingRecords(false);
       }
     };
 
     fetchVaccinationRecords();
-  }, [healthWorker]);
+  }, [healthWorker, isLoadingAuth, authError]);
 
+  /**
+   * Apply filters to records
+   */
   useEffect(() => {
     let filtered = records;
 
@@ -82,6 +146,48 @@ const VaccinationHistory = () => {
   const handleViewRecord = (record: VaccinationRecord) => setSelectedRecord(record);
   const handleCloseModal = () => setSelectedRecord(null);
 
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setDateFilter('');
+    setVerificationFilter('all');
+  };
+
+  // Show loading state
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-primary-600 dark:text-primary-400 animate-spin mx-auto mb-4" />
+          <p className="text-neutral-600 dark:text-neutral-300">Verifying your session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show auth error
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-error-600 dark:text-error-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+            Authentication Required
+          </h2>
+          <p className="text-neutral-600 dark:text-neutral-300 mb-4">
+            {authError}
+          </p>
+          <button
+            onClick={() => navigate('/health-worker/login', { replace: true })}
+            className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-lg font-medium"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Authenticated content
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
@@ -135,11 +241,7 @@ const VaccinationHistory = () => {
               {filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''} found
             </span>
             <button
-              onClick={() => {
-                setSearchTerm('');
-                setDateFilter('');
-                setVerificationFilter('all');
-              }}
+              onClick={handleClearFilters}
               className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 text-sm font-medium"
             >
               Clear Filters
@@ -148,14 +250,27 @@ const VaccinationHistory = () => {
         </div>
       </div>
 
-      {/* Record Cards */}
-      {filteredRecords.length > 0 ? (
+      {/* Loading Records */}
+      {isLoadingRecords ? (
+        <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-primary-600 dark:text-primary-400 animate-spin mx-auto mb-3" />
+            <p className="text-neutral-600 dark:text-neutral-300">Loading vaccination records...</p>
+          </div>
+        </div>
+      ) : filteredRecords.length > 0 ? (
+        /* Record Cards */
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredRecords.map((record) => (
-            <VaccinationRecordCard key={record.id} record={record} onView={handleViewRecord} />
+            <VaccinationRecordCard 
+              key={record.id} 
+              record={record} 
+              onView={handleViewRecord} 
+            />
           ))}
         </div>
       ) : (
+        /* Empty State */
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-12 text-center">
           <User className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
@@ -168,6 +283,8 @@ const VaccinationHistory = () => {
           </p>
         </div>
       )}
+
+      {/* Vaccination Record Modal */}
       {selectedRecord && (
         <VaccinationRecordModal 
           record={selectedRecord} 

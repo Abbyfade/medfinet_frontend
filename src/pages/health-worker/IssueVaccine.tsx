@@ -29,11 +29,13 @@ const vaccineTypes: VaccineType[] = [
   { id: 'hepb', name: 'Hepatitis B', manufacturer: 'GlaxoSmithKline', description: 'Hepatitis B', ageGroup: 'Birth+', dosesRequired: 3 },
 ];
 
-
-
 const IssueVaccine = () => {
-  const { healthWorker } = useHealthWorker();
+  const { healthWorker, isAuthenticated } = useHealthWorker();
   const navigate = useNavigate();
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>('');
+
   const [formData, setFormData] = useState({
     childIdHash: '',
     parentWallet: '',
@@ -54,6 +56,59 @@ const IssueVaccine = () => {
     message: '',
     isVisible: false,
   });
+
+  /**
+   * Check authentication on mount
+   */
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        setIsLoadingAuth(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          setAuthError('No active session found');
+          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+          return;
+        }
+
+        if (!healthWorker || !isAuthenticated) {
+          setAuthError('Health worker profile not found. Please log in again.');
+          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+          return;
+        }
+
+        // Set wallet address from healthWorker
+        if (healthWorker.walletAddress) {
+          setWalletAddress(healthWorker.walletAddress);
+        } else {
+          setAuthError('Wallet address not found in profile.');
+          return;
+        }
+
+        setAuthError(null);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setAuthError('Authentication check failed');
+        setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        navigate('/health-worker/login', { replace: true });
+      }
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [healthWorker, isAuthenticated, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -77,22 +132,24 @@ const IssueVaccine = () => {
       isVisible: true,
     });
   };
+
+  // Reconnect Pera Wallet session
   peraWallet.reconnectSession();
-  const walletAddress = JSON.parse(localStorage.getItem('currentHealthWorker')).walletAddress;
 
-
-  // Frontend code
+  /**
+   * Sign and submit transaction to blockchain
+   */
   const signAndSubmit = async (unsignedTxnBase64: string) => {
     try {
       // Prepare transaction for Pera Wallet
       const txn_64 = algosdk.decodeUnsignedTransaction(
         Buffer.from(unsignedTxnBase64, 'base64')
-      )
+      );
 
       // Sign with Pera Wallet
-      const signedTxn = await peraWallet.signTransaction([[{txn:txn_64}]]);
+      const signedTxn = await peraWallet.signTransaction([[{ txn: txn_64 }]]);
 
-      function uint8ArrayToBase64(u8arr) {
+      function uint8ArrayToBase64(u8arr: Uint8Array) {
         return btoa(String.fromCharCode(...u8arr));
       }
 
@@ -109,31 +166,52 @@ const IssueVaccine = () => {
       });
 
       const result = await response.json();
-      return {txnId: result.txnId, assetID: result.assetID}
+      return { txnId: result.txnId, assetID: result.assetID };
     } catch (error) {
       console.error('Signing error:', error);
       throw error;
     }
   };
 
+  /**
+   * Handle form submission
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
-    try {
-
-      const { data: childData, error: childError } = await supabase
-      .from('child_profiles')
-      .select('*')
-      .eq('id', formData.childIdHash)
-      .single(); // assuming unique
-
-    if (childError || !childData) {
-      console.error('Child fetch error:', childError?.message || 'Not found');
+    // Double-check authentication before submitting
+    if (!healthWorker || !isAuthenticated) {
+      setNotification({
+        type: 'error',
+        message: 'You must be authenticated to issue a vaccination record.',
+        isVisible: true,
+      });
+      navigate('/health-worker/login', { replace: true });
       return;
     }
 
-      // 1. Create unsigned transaction
+    setIsSubmitting(true);
+
+    try {
+      // 1. Fetch child data from Supabase
+      const { data: childData, error: childError } = await supabase
+        .from('child_profiles')
+        .select('*')
+        .eq('id', formData.childIdHash)
+        .single();
+
+      if (childError || !childData) {
+        console.error('Child fetch error:', childError?.message || 'Not found');
+        setNotification({
+          type: 'error',
+          message: 'Child profile not found. Please check the child ID.',
+          isVisible: true,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Create unsigned transaction
       const response = await fetch('https://medfinet-backend.onrender.com/api/vaccinations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,30 +227,35 @@ const IssueVaccine = () => {
 
       const result = await response.json();
       
-      // 2. Sign and submit
-      const {txnId, assetID}  = await signAndSubmit(result.unsignedTxn);
-      
+      // 3. Sign and submit to blockchain
+      const { txnId, assetID } = await signAndSubmit(result.unsignedTxn);
 
-      // 3. Save to Supabase
-      await supabase.from('vaccinations').insert([{
+      // 4. Save vaccination record to Supabase
+      const { error: insertError } = await supabase.from('vaccinations').insert([{
         child_id: formData.childIdHash,
-        parent_wallet: "123456",
+        parent_wallet: formData.parentWallet || 'pending',
         health_worker_id: healthWorker.id,
         vaccine_id: formData.vaccineId,
         batch_number: formData.batchNumber,
         date_given: formData.dateAdministered,
         dose_number: formData.doseNumber,
         notes: formData.notes,
-        blockchain_tx: txnId,
+        blockchain_tx_id: txnId,
         provider: healthWorker.name,
         location: healthWorker.facility_name,
         certificate: result.imageUrl,
-        asset_id: assetID
+        asset_id: assetID,
+        verified: true,
       }]);
+
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
 
       setNotification({
         type: 'success',
-        message: `Vaccination NFT issued! TX ID: ${txnId}`,
+        message: `Vaccination NFT issued successfully! TX ID: ${txnId}`,
         isVisible: true
       });
 
@@ -186,11 +269,13 @@ const IssueVaccine = () => {
         doseNumber: 1,
         notes: '',
       });
+
       setTimeout(() => {
         navigate('/health-worker/vaccination-history');
       }, 1500);
 
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Submission error:', error);
       setNotification({
         type: 'error',
         message: error.message || 'Failed to issue vaccination record',
@@ -201,9 +286,44 @@ const IssueVaccine = () => {
     }
   };
 
+  // Show loading state
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-primary-600 dark:text-primary-400 animate-spin mx-auto mb-4" />
+          <p className="text-neutral-600 dark:text-neutral-300">Verifying your session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show auth error
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-error-600 dark:text-error-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+            Authentication Required
+          </h2>
+          <p className="text-neutral-600 dark:text-neutral-300 mb-4">
+            {authError}
+          </p>
+          <button
+            onClick={() => navigate('/health-worker/login', { replace: true })}
+            className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-lg font-medium"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const selectedVaccine = vaccineTypes.find(v => v.id === formData.vaccineId);
 
+  // Authenticated content
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
@@ -245,23 +365,6 @@ const IssueVaccine = () => {
               </button>
             </div>
           </div>
-
-          {/* Parent Wallet */}
-          {/* <div>
-            <label htmlFor="parentWallet" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-              Parent Wallet Address
-            </label>
-            <input
-              type="text"
-              id="parentWallet"
-              name="parentWallet"
-              value={formData.parentWallet}
-              onChange={handleInputChange}
-              placeholder="ALGO..."
-              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-neutral-700 dark:text-white font-mono"
-              required
-            />
-          </div> */}
 
           {/* Vaccine Selection */}
           <div>

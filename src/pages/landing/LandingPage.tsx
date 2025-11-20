@@ -818,9 +818,9 @@ const LandingPage = () => {
                     </div>
                   </Link>
 
-                  {/* Hospital Registration */}
+                  {/* Hospital Portal */}
                   <Link
-                    to="/hospital/register"
+                    to="/admin/login"
                     onClick={() => setIsSignInModalOpen(false)}
                     className="w-full p-4 rounded-lg border-2 border-neutral-200 dark:border-neutral-600 hover:border-accent-300 dark:hover:border-accent-500 hover:bg-accent-50 dark:hover:bg-accent-900/20 transition-all duration-300 text-left group hover:scale-105"
                   >
@@ -829,9 +829,9 @@ const LandingPage = () => {
                         <Building className="h-6 w-6" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-semibold text-neutral-900 dark:text-white group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors duration-300">Hospital Registration</h4>
+                        <h4 className="font-semibold text-neutral-900 dark:text-white group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors duration-300">Hospital Portal</h4>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                          Register your hospital or healthcare facility
+                          Login to your hospital or healthcare facility
                         </p>
                       </div>
                       <ArrowRight className="h-5 w-5 text-neutral-400 group-hover:text-accent-600 dark:group-hover:text-accent-400 group-hover:translate-x-2 transition-all duration-300" />

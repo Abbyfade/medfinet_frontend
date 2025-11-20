@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
-import { 
+import NotificationToast from '../../components/health-worker/NotificationToast';
+import {
+  Loader,
   Shield, 
   Heart, 
   Globe, 
@@ -27,84 +31,233 @@ import {
   BarChart3
 } from 'lucide-react';
 import ThemeToggle from '../../components/common/ThemeToggle';
+import algosdk from 'algosdk';
+import crowdfundingApi, { Campaign, HealthPackage } from '../../services/crowdfundingApi';
+import peraWalletService from '../../services/peraWalletService';
+import donationApi from '../../services/donationApi';
 
 const HealthFinancePage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState('ADA');
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [packages, setPackages] = useState<HealthPackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [selectedCurrency, setSelectedCurrency] = useState('ALGO');
+  const [donating, setDonating] = useState<string | null>(null);
+
+
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
+  const [donationAmount, setDonationAmount] = useState<number>(0);
+  const [customAmount, setCustomAmount] = useState<string>('');
+
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    isVisible: boolean;
+  }>({
+    type: 'success',
+    message: '',
+    isVisible: false,
+  });
+
 
   useEffect(() => {
     setIsVisible(true);
+    loadData();
+
+    const unsubscribe = peraWalletService.onAccountChange((address) => {
+      setWalletAddress(address);
+    });
+
+    const currentAddress = peraWalletService.getAddress();
+    if (currentAddress) {
+      setWalletAddress(currentAddress);
+    }
+
+    return () => unsubscribe();
   }, []);
 
-  const healthPackages = [
-    {
-      id: 1,
-      title: 'VaccineBox',
-      price: 100,
-      description: 'Complete immunization kit for 50 children',
-      impact: '50 children protected',
-      image: 'https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=400',
-      funded: 75,
-      goal: 100
-    },
-    {
-      id: 2,
-      title: 'Solar Fridge',
-      price: 500,
-      description: 'Cold chain support for vaccine storage',
-      impact: 'Serves 1,000+ patients',
-      image: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg?auto=compress&cs=tinysrgb&w=400',
-      funded: 320,
-      goal: 500
-    },
-    {
-      id: 3,
-      title: 'Nutrition Kit',
-      price: 50,
-      description: 'Maternal & child nutrition support',
-      impact: '25 mothers & babies',
-      image: 'https://images.pexels.com/photos/5452291/pexels-photo-5452291.jpeg?auto=compress&cs=tinysrgb&w=400',
-      funded: 45,
-      goal: 50
-    }
-  ];
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [campaignsRes, packagesRes] = await Promise.all([
+        crowdfundingApi.getCampaigns({ status: 'active', limit: 6 }),
+        crowdfundingApi.getHealthPackages({ active: true })
+      ]);
 
-  const featuredProjects = [
-    {
-      id: 1,
-      title: 'Help Nasarawa PHC vaccinate 200 children against measles',
-      location: 'Nasarawa State, Nigeria',
-      goal: 2000,
-      raised: 1400,
-      donors: 28,
-      image: 'https://images.pexels.com/photos/7089626/pexels-photo-7089626.jpeg?auto=compress&cs=tinysrgb&w=400',
-      clinic: 'Nasarawa Primary Health Center',
-      urgency: 'high'
-    },
-    {
-      id: 2,
-      title: 'Solar power system for Kenyan rural clinic',
-      location: 'Turkana County, Kenya',
-      goal: 1500,
-      raised: 890,
-      donors: 15,
-      image: 'https://images.pexels.com/photos/4386465/pexels-photo-4386465.jpeg?auto=compress&cs=tinysrgb&w=400',
-      clinic: 'Turkana Community Health Center',
-      urgency: 'medium'
-    },
-    {
-      id: 3,
-      title: 'Mobile vaccination unit for remote villages',
-      location: 'Northern Ghana',
-      goal: 3000,
-      raised: 2100,
-      donors: 42,
-      image: 'https://images.pexels.com/photos/5452201/pexels-photo-5452201.jpeg?auto=compress&cs=tinysrgb&w=400',
-      clinic: 'Ghana Mobile Health Initiative',
-      urgency: 'high'
+      if (campaignsRes.success) {
+        setCampaigns(campaignsRes.data);
+      }
+
+      if (packagesRes.success) {
+        setPackages(packagesRes.data.slice(0, 3));
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+const handleOpenDonationModal = async (campaignId: string) => {
+  try {
+    const campaignResponse = await crowdfundingApi.getCampaign(campaignId);
+    if (campaignResponse.success && campaignResponse.data) {
+      setSelectedCampaign(campaignResponse.data);
+      setDonationAmount(0);
+      setCustomAmount('');
+      setIsDonationModalOpen(true);
+    } else {
+      alert('Failed to load campaign details');
+    }
+  } catch (error) {
+    console.error('Error loading campaign:', error);
+    alert('Error loading campaign details');
+  }
+};
+
+const handleDonate = async () => {
+  if (!selectedCampaign || !walletAddress) {
+    setNotification({
+      type: 'error',
+      message: 'Please connect your wallet first',
+      isVisible: true,
+    });
+    return;
+  }
+
+  if (donationAmount <= 0) {
+    setNotification({
+      type: 'error', 
+      message: 'Please enter a valid donation amount',
+      isVisible: true,
+    });
+    return;
+  }
+
+  if (donationAmount > (selectedCampaign.target_amount - selectedCampaign.raised_amount)) {
+    alert(`Donation amount exceeds remaining goal amount of ${selectedCampaign.currency} ${selectedCampaign.target_amount - selectedCampaign.raised_amount}`);
+    return;
+  }
+
+  setDonating(selectedCampaign.id);
+  try {
+    // Prepare donation transaction
+    const preparationResponse = await donationApi.prepareDonation({
+      campaignId: selectedCampaign.id,
+      amount: donationAmount,
+      donorWallet: walletAddress
+    });
+
+    if (preparationResponse.success) {
+        // Sign ALL transactions with Pera Wallet
+        const signedTransactions = await peraWalletService.signTransaction(
+          preparationResponse.data.unsignedTransactions // Now an array
+        );
+
+        // Confirm the donation with all signed transactions
+        const confirmationResponse = await donationApi.confirmDonation({
+          donationId: preparationResponse.data.donationId,
+          signedTransaction: signedTransactions // Send all signed transactions
+        });
+
+        if (confirmationResponse.success) {
+          setNotification({
+            type: 'success',
+            message: `Donation successful! Transaction hash: ${confirmationResponse.data.transactionHash}`,
+            isVisible: true,
+          });
+          // Refresh campaigns to update progress
+          loadData();
+          setIsDonationModalOpen(false);
+          setSelectedCampaign(null);
+        } else {
+          throw new Error(confirmationResponse.message || 'Failed to confirm donation');
+        }
+      } else {
+        throw new Error(preparationResponse.message || 'Failed to prepare donation');
+      }
+  } catch (error) {
+    console.error('Donation error:', error);
+    setNotification({
+      type: 'error',
+      message: `Donation failed: ${(error as Error).message}`,
+      isVisible: true,
+    });
+  } finally {
+    setDonating(null);
+  }
+};
+
+  const handleAmountSelect = (amount: number) => {
+    setDonationAmount(amount);
+    setCustomAmount('');
+  };
+
+  const handleCustomAmountChange = (value: string) => {
+    setCustomAmount(value);
+    const amount = parseFloat(value);
+    if (!isNaN(amount) && amount > 0) {
+      setDonationAmount(amount);
+    } else {
+      setDonationAmount(0);
+    }
+  };
+
+  // Predefined donation amounts
+  const predefinedAmounts = [10, 25, 50, 100, 250, 500];
+
+
+  const handleConnectWallet = async () => {
+    try {
+      if (walletAddress) {
+        await peraWalletService.disconnect();
+      } else {
+        await peraWalletService.connect();
+      }
+    } catch (error) {
+      console.error('Wallet connection error:', error);
+    }
+  }
+
+  const handlePackageDonate = async (pkg: HealthPackage) => {
+    if (!walletAddress) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    // For health packages, we'll treat them as campaigns with a fixed amount
+    // You might need to adjust this based on your package structure
+    const donationAmount = pkg.price || 100; // Default amount if price is not available
+    
+    try {
+      const preparationResponse = await donationApi.prepareDonation({
+        campaignId: pkg.id, // Assuming package has an ID that can be used as campaignId
+        amount: donationAmount,
+        donorWallet: walletAddress
+      });
+
+      if (preparationResponse.success) {
+        const signedTxn = await peraWalletService.signTransaction(
+          preparationResponse.data.unsignedTransaction
+        );
+
+        const confirmationResponse = await donationApi.confirmDonation({
+          donationId: preparationResponse.data.donationId,
+          signedTransaction: signedTxn
+        });
+
+        if (confirmationResponse.success) {
+          alert('Package donation successful! Transaction hash: ' + confirmationResponse.data.transactionHash);
+          loadData();
+        }
+      }
+    } catch (error) {
+      console.error('Package donation error:', error);
+      alert('Package donation failed: ' + (error as Error).message);
+    }
+  };
 
   const currencies = [
     { symbol: 'ADA', name: 'Cardano', icon: '₳' },
@@ -140,18 +293,12 @@ const HealthFinancePage = () => {
               <a href="#defi" className="text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                 DeFi
               </a>
-              <Link to="/healthfinance/clinic-dashboard" className="text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
-                For Clinics
-              </Link>
               <ThemeToggle />
-              <Link
-                to="/login"
-                className="text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-              >
-                Sign In
-              </Link>
-              <button className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105 hover:shadow-lg">
-                Connect Wallet
+              <button
+                  onClick={handleConnectWallet}
+                  className="block w-full text-left px-3 py-2 bg-primary-600 text-white rounded-lg font-medium"
+                >
+                  {walletAddress ? 'Disconnect' : 'Connect Wallet'}
               </button>
             </div>
 
@@ -180,14 +327,11 @@ const HealthFinancePage = () => {
                 <a href="#defi" className="block px-3 py-2 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                   DeFi
                 </a>
-                <Link to="/healthfinance/clinic-dashboard" className="block px-3 py-2 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
-                  For Clinics
-                </Link>
-                <Link to="/login" className="block px-3 py-2 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
-                  Sign In
-                </Link>
-                <button className="block w-full text-left px-3 py-2 bg-primary-600 text-white rounded-lg font-medium">
-                  Connect Wallet
+                <button
+                  onClick={handleConnectWallet}
+                  className="block w-full text-left px-3 py-2 bg-primary-600 text-white rounded-lg font-medium"
+                >
+                  {walletAddress ? 'Disconnect' : 'Connect Wallet'}
                 </button>
               </div>
             </div>
@@ -234,65 +378,74 @@ const HealthFinancePage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {featuredProjects.map((project, index) => (
-              <div 
-                key={project.id}
-                className={`bg-white dark:bg-neutral-800 rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${
-                  isVisible ? 'transform translate-y-0 opacity-100' : 'transform translate-y-8 opacity-0'
-                }`}
-                style={{ transitionDelay: `${index * 0.2}s` }}
-              >
-                <div className="relative">
-                  <img 
-                    src={project.image} 
-                    alt={project.title}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className={`absolute top-4 right-4 px-2 py-1 rounded-full text-xs font-medium ${
-                    project.urgency === 'high' ? 'bg-error-500 text-white' : 'bg-warning-500 text-white'
-                  }`}>
-                    {project.urgency === 'high' ? 'Urgent' : 'Active'}
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader className="h-8 w-8 text-primary-600 animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {campaigns.map((campaign, index) => (
+                <div 
+                  key={campaign.id}
+                  className={`bg-white dark:bg-neutral-800 rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${
+                    isVisible ? 'transform translate-y-0 opacity-100' : 'transform translate-y-8 opacity-0'
+                  }`}
+                  style={{ transitionDelay: `${index * 0.2}s` }}
+                >
+                  <div className="relative">
+                    <img 
+                      src={campaign.image || 'https://images.pexels.com/photos/7089626/pexels-photo-7089626.jpeg?auto=compress&cs=tinysrgb&w=400'} 
+                      alt={campaign.title}
+                      className="w-full h-48 object-cover"
+                    />
+                    <div className={`absolute top-4 right-4 px-2 py-1 rounded-full text-xs font-medium ${
+                      campaign.status === 'ACTIVE' ? 'bg-error-500 text-white' : 'bg-warning-500 text-white'
+                    }`}>
+                      {campaign.status === 'high' ? 'Urgent' : 'Active'}
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <div className="flex items-center mb-2">
+                      <MapPin className="h-4 w-4 text-neutral-500 mr-2" />
+                      <span className="text-sm text-neutral-600 dark:text-neutral-300">{campaign.location}</span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
+                      {campaign.title}
+                    </h3>
+                    <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
+                      {campaign.creator}
+                    </p>
+                    
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-neutral-600 dark:text-neutral-300">Progress</span>
+                        <span className="font-medium text-neutral-900 dark:text-white">
+                          {campaign.currency} {campaign.raised_amount.toLocaleString() || '0'} / {campaign.currency} {campaign.target_amount.toLocaleString() || '0'}
+                        </span>
+                      </div>
+                      <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                        <div 
+                          className="bg-primary-600 h-2 rounded-full transition-all duration-1000"
+                          style={{ width: `${campaign.raised_amount * 100 / campaign.target_amount || 0}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                        <span>{Math.round(campaign.raised_amount * 100 / campaign.target_amount || 0)}% funded</span>
+                        {/* <span>{campaign.donor_count || 0} donors</span> */}
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => handleOpenDonationModal(campaign.id)}
+                      className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Fund This Project
+                    </button>
                   </div>
                 </div>
-                <div className="p-6">
-                  <div className="flex items-center mb-2">
-                    <MapPin className="h-4 w-4 text-neutral-500 mr-2" />
-                    <span className="text-sm text-neutral-600 dark:text-neutral-300">{project.location}</span>
-                  </div>
-                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-3">
-                    {project.title}
-                  </h3>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
-                    {project.clinic}
-                  </p>
-                  
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-neutral-600 dark:text-neutral-300">Progress</span>
-                      <span className="font-medium text-neutral-900 dark:text-white">
-                        ${project.raised.toLocaleString()} / ${project.goal.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-                      <div 
-                        className="bg-primary-600 h-2 rounded-full transition-all duration-1000"
-                        style={{ width: `${(project.raised / project.goal) * 100}%` }}
-                      ></div>
-                    </div>
-                    <div className="flex justify-between text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                      <span>{Math.round((project.raised / project.goal) * 100)}% funded</span>
-                      <span>{project.donors} donors</span>
-                    </div>
-                  </div>
-                  
-                  <button className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
-                    Fund This Project
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -427,61 +580,71 @@ const HealthFinancePage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {healthPackages.map((pkg, index) => (
-              <div 
-                key={pkg.id}
-                className={`bg-white dark:bg-neutral-800 rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${
-                  isVisible ? 'transform translate-y-0 opacity-100' : 'transform translate-y-8 opacity-0'
-                }`}
-                style={{ transitionDelay: `${index * 0.2}s` }}
-              >
-                <div className="relative">
-                  <img 
-                    src={pkg.image} 
-                    alt={pkg.title}
-                    className="w-full h-40 object-cover"
-                  />
-                  <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full">
-                    <span className="text-sm font-bold text-neutral-900">${pkg.price}</span>
-                  </div>
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
-                    {pkg.title}
-                  </h3>
-                  <p className="text-neutral-600 dark:text-neutral-300 mb-3">
-                    {pkg.description}
-                  </p>
-                  <div className="flex items-center text-sm text-primary-600 dark:text-primary-400 mb-4">
-                    <Target className="h-4 w-4 mr-2" />
-                    <span className="font-medium">{pkg.impact}</span>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-neutral-600 dark:text-neutral-300">Funded</span>
-                      <span className="font-medium text-neutral-900 dark:text-white">
-                        ${pkg.funded} / ${pkg.goal}
-                      </span>
-                    </div>
-                    <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-                      <div 
-                        className="bg-primary-600 h-2 rounded-full transition-all duration-1000"
-                        style={{ width: `${(pkg.funded / pkg.goal) * 100}%` }}
-                      ></div>
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader className="h-8 w-8 text-primary-600 animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+              {packages.map((pkg, index) => (
+                <div 
+                  key={pkg.id}
+                  className={`bg-white dark:bg-neutral-800 rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${
+                    isVisible ? 'transform translate-y-0 opacity-100' : 'transform translate-y-8 opacity-0'
+                  }`}
+                  style={{ transitionDelay: `${index * 0.2}s` }}
+                >
+                  <div className="relative">
+                    <img 
+                      src={pkg.image || 'https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=400'} 
+                      alt={pkg.title}
+                      className="w-full h-40 object-cover"
+                    />
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full">
+                      <span className="text-sm font-bold text-neutral-900">${pkg.price}</span>
                     </div>
                   </div>
-                  
-                  <button className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
-                    Fund Package
-                  </button>
+                  <div className="p-6">
+                    <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+                      {pkg.title}
+                    </h3>
+                    <p className="text-neutral-600 dark:text-neutral-300 mb-3">
+                      {pkg.description}
+                    </p>
+                    <div className="flex items-center text-sm text-primary-600 dark:text-primary-400 mb-4">
+                      <Target className="h-4 w-4 mr-2" />
+                      <span className="font-medium">{pkg.impact}</span>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-neutral-600 dark:text-neutral-300">Funded</span>
+                        <span className="font-medium text-neutral-900 dark:text-white">
+                          ${pkg.funded || 0} / ${pkg.goal || 0}
+                        </span>
+                      </div>
+                      <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                        <div 
+                          className="bg-primary-600 h-2 rounded-full transition-all duration-1000"
+                          style={{ width: `${pkg.progress || 0}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => handlePackageDonate(pkg)}
+                      className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Fund Package
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
+
 
       {/* Clinic/NGO Dashboard Section */}
       <section className="py-20 bg-neutral-50 dark:bg-neutral-800">
@@ -780,6 +943,168 @@ const HealthFinancePage = () => {
           </div>
         </div>
       </footer>
+      {/* Donation Modal */}
+      <Transition appear show={isDonationModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsDonationModalOpen(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-neutral-800 p-6 text-left align-middle shadow-xl transition-all">
+                  {selectedCampaign && (
+                    <>
+                      <Dialog.Title as="h3" className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
+                        Fund {selectedCampaign.title}
+                      </Dialog.Title>
+
+                      {/* Campaign Details */}
+                      <div className="mb-6">
+                        <div className="flex items-center mb-2">
+                          <MapPin className="h-4 w-4 text-neutral-500 mr-2" />
+                          <span className="text-sm text-neutral-600 dark:text-neutral-300">{selectedCampaign.location}</span>
+                        </div>
+                        
+                        <div className="mb-4">
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-neutral-600 dark:text-neutral-300">Progress</span>
+                            <span className="font-medium text-neutral-900 dark:text-white">
+                              {selectedCampaign.currency} {selectedCampaign.raised_amount.toLocaleString() || '0'} / {selectedCampaign.currency} {selectedCampaign.target_amount.toLocaleString() || '0'}
+                            </span>
+                          </div>
+                          <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                            <div 
+                              className="bg-primary-600 h-2 rounded-full transition-all duration-1000"
+                              style={{ 
+                                width: `${Math.min(100, (selectedCampaign.raised_amount / selectedCampaign.target_amount) * 100)}%` 
+                              }}
+                            ></div>
+                          </div>
+                          <div className="flex justify-between text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                            <span>{Math.round((selectedCampaign.raised_amount / selectedCampaign.target_amount) * 100)}% funded</span>
+                            <span>{selectedCampaign.donor_count || 0} donors</span>
+                          </div>
+                        </div>
+
+                        <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-4">
+                          {selectedCampaign.description}
+                        </p>
+                      </div>
+
+                      {/* Donation Amount Selection */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
+                          Select Donation Amount
+                        </label>
+                        
+                        {/* Predefined Amounts */}
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          {predefinedAmounts.map((amount) => (
+                            <button
+                              key={amount}
+                              onClick={() => handleAmountSelect(amount)}
+                              className={`p-3 rounded-lg border transition-colors ${
+                                donationAmount === amount
+                                  ? 'bg-primary-600 text-white border-primary-600'
+                                  : 'bg-white dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-600 hover:border-primary-600'
+                              }`}
+                            >
+                              ${amount}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Custom Amount */}
+                        <div>
+                          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                            Or enter custom amount
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              {/* <span className="text-neutral-500 dark:text-neutral-400 text-right block">{selectedCampaign.currency}</span> */}
+                            </div>
+                            <input
+                              type="number"
+                              value={customAmount}
+                              onChange={(e) => handleCustomAmountChange(e.target.value)}
+                              placeholder={`Enter amount in ${selectedCampaign.currency}`}
+                              className="block w-full pl-8 pr-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-500 dark:placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              min="1"
+                              step="0.01"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Remaining Goal */}
+                        {donationAmount > 0 && (
+                          <div className="mt-4 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+                            <p className="text-sm text-primary-700 dark:text-primary-300">
+                              Your donation of <strong>{selectedCampaign.currency} {donationAmount}</strong> will help reach the goal of <strong>{selectedCampaign.currency} {selectedCampaign.target_amount}</strong>
+                            </p>
+                            {donationAmount > (selectedCampaign.goal_amount - selectedCampaign.raised_amount) && (
+                              <p className="text-sm text-error-600 dark:text-error-400 mt-1">
+                                This amount exceeds the remaining goal by {selectedCampaign.currency} {donationAmount - (selectedCampaign.target_amount - selectedCampaign.raised_amount)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={() => setIsDonationModalOpen(false)}
+                          className="flex-1 px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDonate}
+                          disabled={donating === selectedCampaign.id || donationAmount <= 0}
+                          className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-neutral-400 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center"
+                        >
+                          {donating === selectedCampaign.id ? (
+                            <>
+                              <Loader className="h-4 w-4 animate-spin mr-2" />
+                              Processing...
+                            </>
+                          ) : (
+                            `Donate $${donationAmount}`
+                          )}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+      <NotificationToast
+        type={notification.type}
+        message={notification.message}
+        isVisible={notification.isVisible}
+        onClose={() => setNotification(prev => ({ ...prev, isVisible: false }))}
+      />
     </div>
   );
 };

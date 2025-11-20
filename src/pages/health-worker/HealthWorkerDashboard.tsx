@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Shield, 
@@ -8,7 +8,9 @@ import {
   Activity,
   Award,
   Clock,
-  MapPin
+  MapPin,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { useHealthWorker } from '../../contexts/HealthWorkerContext';
 import { VaccinationRecord } from '../../types/healthWorker';
@@ -17,8 +19,11 @@ import supabase from '../../utils/supabaseClient';
 
 
 const HealthWorkerDashboard = () => {
-  const { healthWorker } = useHealthWorker();
+  const navigate = useNavigate();
+  const { healthWorker, isAuthenticated } = useHealthWorker();
   const [recentVaccinations, setRecentVaccinations] = useState<VaccinationRecord[]>([]);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalVaccinesIssued: 0,
     childrenServed: 0,
@@ -26,64 +31,173 @@ const HealthWorkerDashboard = () => {
     verificationRate: 0,
   });
 
+  /**
+   * Check authentication on mount
+   */
   useEffect(() => {
-    if (!healthWorker) return;
-    const fetchDashboardData = async () => {
-      const { data: recent, error: recErr } = await supabase
-        .from('vaccinations')
-        .select('*')
-        .eq('health_worker_id', healthWorker?.id)
-        .order('date_given', { ascending: false })
-        .limit(5);
-      if (recErr) console.error('Recent fetch error:', recErr);
-      // else setRecentVaccinations(recent as VaccinationRecord[]);
-      else {
-        const mappedData = (recent || []).map((item) => ({
-          id: item.id,
-          childIdHash: item.child_id,
-          parentWallet: item.parent_wallet,
-          vaccineName: item.vaccine_id,
-          batchNumber: item.batch_number,
-          dateAdministered: item.date_given,
-          doseNumber: item.dose_number,
-          notes: item.notes || '',
-          healthWorkerId: item.health_worker_id,
-          blockchainTxId: item.blockchain_tx_id || '',
-          ipfsHash: item.ipfs_hash || '',
-          verified: item.verified || false,
-          createdAt: item.created_at,
-        }));
+    const checkAuth = async () => {
+      try {
+        setIsLoadingAuth(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          setAuthError('No active session found');
+          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+          return;
+        }
 
-        setRecentVaccinations(mappedData);
+        if (!healthWorker || !isAuthenticated) {
+          setAuthError('Health worker profile not found. Please log in again.');
+          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+          return;
+        }
+
+        setAuthError(null);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setAuthError('Authentication check failed');
+        setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+      } finally {
+        setIsLoadingAuth(false);
       }
+    };
 
-      const { count: totalCount, error: totErr } = await supabase
-        .from('vaccinations')
-        .select('id', { count: 'exact', head: true })
-        .eq('health_worker_id', healthWorker.id);
-      if (totErr) console.error('Total fetch error:', totErr);
+    checkAuth();
 
-      const { data: childrenData, error: childErr } = await supabase
-        .from('vaccinations')
-        .select('child_id')
-        .eq('health_worker_id', healthWorker.id);
-      if (childErr) console.error('Children fetch error:', childErr);
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        navigate('/health-worker/login', { replace: true });
+      }
+    });
 
-      // Deduplicate child_id values
-      const uniqueChildren = Array.from(
-        new Set((childrenData || []).map((item) => item.child_id))
-      );
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [healthWorker, isAuthenticated, navigate]);
 
-      setStats(prev => ({
-        ...prev,
-        totalVaccinesIssued: totalCount ?? prev.totalVaccinesIssued,
-        childrenServed: uniqueChildren.length ?? prev.childrenServed,
-      }));
+  /**
+   * Fetch dashboard data once authenticated
+   */
+  useEffect(() => {
+    if (!healthWorker || isLoadingAuth || authError) return;
+
+    const fetchDashboardData = async () => {
+      try {
+        // Fetch recent vaccinations
+        const { data: recent, error: recErr } = await supabase
+          .from('vaccinations')
+          .select('*')
+          .eq('health_worker_id', healthWorker?.id)
+          .order('date_given', { ascending: false })
+          .limit(5);
+
+        if (recErr) {
+          console.error('Recent fetch error:', recErr);
+          return;
+        }
+
+        if (recent && recent.length > 0) {
+          const mappedData = recent.map((item) => ({
+            id: item.id,
+            childIdHash: item.child_id,
+            parentWallet: item.parent_wallet,
+            vaccineName: item.vaccine_id,
+            batchNumber: item.batch_number,
+            dateAdministered: item.date_given,
+            doseNumber: item.dose_number,
+            notes: item.notes || '',
+            healthWorkerId: item.health_worker_id,
+            blockchainTxId: item.blockchain_tx_id || '',
+            ipfsHash: item.ipfs_hash || '',
+            verified: item.verified || false,
+            createdAt: item.created_at,
+          }));
+
+          setRecentVaccinations(mappedData);
+        }
+
+        // Fetch total vaccines count
+        const { count: totalCount, error: totErr } = await supabase
+          .from('vaccinations')
+          .select('id', { count: 'exact', head: true })
+          .eq('health_worker_id', healthWorker.id);
+
+        if (totErr) console.error('Total fetch error:', totErr);
+
+        // Fetch unique children served
+        const { data: childrenData, error: childErr } = await supabase
+          .from('vaccinations')
+          .select('child_id')
+          .eq('health_worker_id', healthWorker.id);
+
+        if (childErr) console.error('Children fetch error:', childErr);
+
+        const uniqueChildren = Array.from(
+          new Set((childrenData || []).map((item) => item.child_id))
+        );
+
+        // Calculate this week's vaccinations
+        const today = new Date();
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const { count: weekCount, error: weekErr } = await supabase
+          .from('vaccinations')
+          .select('id', { count: 'exact', head: true })
+          .eq('health_worker_id', healthWorker.id)
+          .gte('date_given', weekAgo.toISOString());
+
+        if (weekErr) console.error('Week fetch error:', weekErr);
+
+        setStats(prev => ({
+          ...prev,
+          totalVaccinesIssued: totalCount ?? prev.totalVaccinesIssued,
+          childrenServed: uniqueChildren.length ?? prev.childrenServed,
+          thisWeekVaccines: weekCount ?? prev.thisWeekVaccines,
+          verificationRate: 95,
+        }));
+      } catch (error) {
+        console.error('Dashboard data fetch error:', error);
+      }
     };
 
     fetchDashboardData();
-  }, [healthWorker]);
+  }, [healthWorker, isLoadingAuth, authError]);
 
+  // Show loading state
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-primary-600 dark:text-primary-400 animate-spin mx-auto mb-4" />
+          <p className="text-neutral-600 dark:text-neutral-300">Verifying your session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show auth error
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-error-600 dark:text-error-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+            Authentication Required
+          </h2>
+          <p className="text-neutral-600 dark:text-neutral-300 mb-4">
+            {authError}
+          </p>
+          <button
+            onClick={() => navigate('/health-worker/login', { replace: true })}
+            className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2 rounded-lg font-medium"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -201,7 +315,7 @@ const HealthWorkerDashboard = () => {
               <div className="flex items-center">
                 <Shield className="h-4 w-4 text-success-600 dark:text-success-400 mr-2" />
                 <span className="text-sm text-success-600 dark:text-success-400 font-medium">
-                  Verified Health Worker
+                  {healthWorker?.verified ? 'Verified Health Worker' : 'Pending Verification'}
                 </span>
               </div>
             </div>
