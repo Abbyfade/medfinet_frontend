@@ -86,7 +86,7 @@ const HealthFinancePage = () => {
         crowdfundingApi.getCampaigns({ status: 'active', limit: 6 }),
         crowdfundingApi.getHealthPackages({ active: true })
       ]);
-
+      console.log(campaignsRes.data)
       if (campaignsRes.success) {
         setCampaigns(campaignsRes.data);
       }
@@ -394,7 +394,7 @@ const handleDonate = async () => {
                 >
                   <div className="relative">
                     <img 
-                      src={campaign.image || 'https://images.pexels.com/photos/7089626/pexels-photo-7089626.jpeg?auto=compress&cs=tinysrgb&w=400'} 
+                      src={campaign.image_url|| 'https://images.pexels.com/photos/7089626/pexels-photo-7089626.jpeg?auto=compress&cs=tinysrgb&w=400'} 
                       alt={campaign.title}
                       className="w-full h-48 object-cover"
                     />

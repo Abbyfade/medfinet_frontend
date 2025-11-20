@@ -384,6 +384,60 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
     return {};
   }
 };
+  // Function to upload images to Supabase
+const uploadImagesToSupabase = async (files: File[]): Promise<string[]> => {
+  const uploadedUrls: string[] = [];
+  
+  try {
+    for (const file of files) {
+      // Generate unique file name
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `campaign-images/${fileName}`;
+
+      // Upload to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('campaigns') // Make sure this bucket exists in your Supabase storage
+        .upload(filePath, file);
+
+      if (error) {
+        console.error('Error uploading image:', error);
+        continue;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('campaigns')
+        .getPublicUrl(filePath);
+
+      uploadedUrls.push(publicUrl);
+    }
+  } catch (error) {
+    console.error('Error in uploadImagesToSupabase:', error);
+  }
+
+  return uploadedUrls;
+};
+
+// Add this function to handle file selection
+const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = e.target.files;
+  if (files) {
+    const fileArray = Array.from(files);
+    setNewCampaign(prev => ({
+      ...prev,
+      images: [...prev.images, ...fileArray]
+    }));
+  }
+};
+
+// Add this function to remove selected images
+const removeSelectedImage = (index: number) => {
+  setNewCampaign(prev => ({
+    ...prev,
+    images: prev.images.filter((_, i) => i !== index)
+  }));
+};
 
   // Fetch campaigns from backend
   const fetchCampaigns = async () => {
@@ -417,6 +471,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
       const filteredCampaigns = campaignsData.filter(campaign => 
         campaign.creatorWallet === walletAddress
       );
+      console.log(filteredCampaigns)
 
       // Transform data to match frontend format
       const transformedCampaigns: Campaign[] = filteredCampaigns.map(campaign => ({
@@ -429,7 +484,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
         status: campaign.status,
         donors: campaign._count?.donations || campaign.donors || 0,
         description: campaign.description,
-        images: campaign.images || ['https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=400'],
+        images: campaign.imageUrl,
         createdAt: campaign.createdAt,
         endDate: campaign.endDate,
         impactGoal: campaign.impactGoal,
@@ -476,6 +531,16 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
     setCreateCampaignError(null);
     setIsCreatingCampaign(true);
 
+     let imageUrls: string[] = [];
+    if (newCampaign.images.length > 0) {
+      imageUrls = await uploadImagesToSupabase(newCampaign.images);
+      if (imageUrls.length === 0) {
+        throw new Error('Failed to upload images. Please try again.');
+      }
+    }
+    let imageUrl = imageUrls[0]
+    console.log(imageUrl);
+
     const campaign: Campaign = {
       id: `camp_${Date.now()}`,
       title: newCampaign.title,
@@ -486,7 +551,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
       status: 'pending',
       donors: 0,
       description: newCampaign.description,
-      images: ['https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=400'],
+      imageUrl: imageUrl,
       createdAt: new Date().toISOString().split('T')[0],
       endDate: newCampaign.endDate,
       impactGoal: newCampaign.impactGoal,
@@ -512,6 +577,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
       }
 
       const created = await res.json();
+      console.log(created)
 
       await fetchCampaigns();
       // on success: add campaign, clear form and close modal
@@ -539,10 +605,16 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
   const handlePublishUpdate = async () => {
     if (!selectedCampaign) return;
 
+     // Upload images to Supabase if any
+    let imageUrls: string[] = [];
+    if (newUpdate.images.length > 0) {
+      imageUrls = await uploadImagesToSupabase(newUpdate.images);
+    }
+
     const updateData = {
       title: newUpdate.title,
       content: newUpdate.content,
-      images: newUpdate.images.length > 0 ? ['https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=300'] : []
+      images: imageUrls // Use uploaded URLs
     };
 
     try {
@@ -1141,7 +1213,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
             <div key={campaign.id} className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
               <div className="h-40 overflow-hidden relative">
                 <img 
-                  src={campaign.images || 'https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=400'} 
+                  src={campaign.images||'https://images.pexels.com/photos/5452293/pexels-photo-5452293.jpeg?auto=compress&cs=tinysrgb&w=400'} 
                   alt={campaign.title}
                   className="w-full h-full object-cover"
                 />
@@ -1964,6 +2036,34 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                       Campaign Images
                     </label>
+                    
+                    {/* Show selected images preview */}
+                    {newCampaign.images.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">
+                          Selected images ({newCampaign.images.length}):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {newCampaign.images.map((file, index) => (
+                            <div key={index} className="relative">
+                              <img
+                                src={URL.createObjectURL(file)}
+                                alt={`Preview ${index + 1}`}
+                                className="w-16 h-16 object-cover rounded-md"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeSelectedImage(index)}
+                                className="absolute -top-1 -right-1 bg-error-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="border-2 border-dashed border-neutral-300 dark:border-neutral-600 rounded-lg p-6 text-center">
                       <Camera className="h-8 w-8 text-neutral-400 mx-auto mb-2" />
                       <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">
@@ -1975,6 +2075,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
                         accept="image/*"
                         className="hidden"
                         id="campaign-images"
+                        onChange={handleImageSelection}
                       />
                       <label
                         htmlFor="campaign-images"
@@ -1982,6 +2083,9 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
                       >
                         Choose Images
                       </label>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
+                        PNG, JPG, JPEG up to 5MB each
+                      </p>
                     </div>
                   </div>
                 </div>
