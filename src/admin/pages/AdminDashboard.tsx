@@ -357,7 +357,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
       console.warn('No wallet address found');
       return {};
     }
-    const res = await fetch('http://localhost:5000/api/admin/auth/wallet-login', {
+    const res = await fetch('https://medfinet-backend.onrender.com/api/admin/auth/wallet-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ wallet_address: walletAddress })
@@ -395,7 +395,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
         throw new Error('No wallet address found');
       }
 
-      const res = await fetch('http://localhost:5000/api/campaigns', {
+      const res = await fetch('https://medfinet-backend.onrender.com/api/campaigns', {
         method: 'GET'
       });
       
@@ -497,7 +497,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
       if (!isAuthenticatedAdmin) throw new Error('Not authenticated');
 
       const headers = await getAuthHeaders();
-      const res = await fetch('http://localhost:5000/api/campaigns', {
+      const res = await fetch('https://medfinet-backend.onrender.com/api/campaigns', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -547,7 +547,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
 
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`http://localhost:5000/api/campaigns/${selectedCampaign.id}/updates`, {
+      const res = await fetch(`https://medfinet-backend.onrender.com/api/campaigns/${selectedCampaign.id}/updates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -655,7 +655,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
         
         // Step 1: Initiate withdrawal using the new endpoint
         const initiateResponse = await fetch(
-          `http://localhost:5000/api/withdrawals/${campaign.id}/withdraw`,
+          `https://medfinet-backend.onrender.com/api/withdrawals/${campaign.id}/withdraw`,
           {
             method: 'POST',
             headers: {
@@ -685,7 +685,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
             );
         // Step 3: Complete withdrawal with signed transaction
         const completeResponse = await fetch(
-          `http://localhost:5000/api/withdrawals/${initiateResult.data.withdrawalId}/complete`,
+          `https://medfinet-backend.onrender.com/api/withdrawals/${initiateResult.data.withdrawalId}/complete`,
           {
             method: 'POST',
             headers: {
