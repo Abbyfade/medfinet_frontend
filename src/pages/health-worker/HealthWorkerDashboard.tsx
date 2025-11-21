@@ -38,13 +38,13 @@ const HealthWorkerDashboard = () => {
     const checkAuth = async () => {
       try {
         setIsLoadingAuth(true);
-        const { data: { session } } = await supabase.auth.getSession();
+        // const { data: { session } } = await supabase.auth.getSession();
         
-        if (!session) {
-          setAuthError('No active session found');
-          setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
-          return;
-        }
+        // if (!session) {
+        //   setAuthError('No active session found');
+        //   setTimeout(() => navigate('/health-worker/login', { replace: true }), 2000);
+        //   return;
+        // }
 
         if (!healthWorker || !isAuthenticated) {
           setAuthError('Health worker profile not found. Please log in again.');
@@ -65,15 +65,15 @@ const HealthWorkerDashboard = () => {
     checkAuth();
 
     // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
-        navigate('/health-worker/login', { replace: true });
-      }
-    });
+    // const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    //   if (event === 'SIGNED_OUT' || !session) {
+    //     navigate('/health-worker/login', { replace: true });
+    //   }
+    // });
 
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
+    // return () => {
+    //   authListener?.subscription.unsubscribe();
+    // };
   }, [healthWorker, isAuthenticated, navigate]);
 
   /**

@@ -29,7 +29,7 @@ const connectPeraWallet = async () => {
   try {
     let walletAddress;
     
-    // First check if already connected
+    // // First check if already connected
     const existingAccounts = await peraWallet.reconnectSession();
     
     if (existingAccounts.length > 0) {
