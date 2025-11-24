@@ -1346,9 +1346,9 @@ const removeSelectedImage = (index: number) => {
                     Publish Update
                   </button>
                   <div className="flex space-x-2">
-                    <button className="text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-300">
+                    {/* <button className="text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-300">
                       <Eye className="h-4 w-4" />
-                    </button>
+                    </button> */}
                     <button 
                     onClick={() => window.open(`https://testnet.explorer.perawallet.app/transactions/?transaction_list_address=${campaign.escrowAddress}`, '_blank')}
                     className="text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-300">
