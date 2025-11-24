@@ -9,7 +9,7 @@ interface VaccinationRecordCardProps {
 const VaccinationRecordCard = ({ record, onView }: VaccinationRecordCardProps) => {
   const handleViewOnExplorer = () => {
     if (record.blockchainTxId) {
-      window.open(`https://algoexplorer.io/tx/${record.blockchainTxId}`, '_blank');
+      window.open(`https://testnet.explorer.perawallet.app/tx/${record.blockchainTxId}`, '_blank');
     }
   };
 

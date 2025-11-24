@@ -7,6 +7,7 @@ import {
   Users, 
   Plus, 
   Edit, 
+  ExternalLink,
   Eye, 
   Download,
   Upload,
@@ -1348,8 +1349,10 @@ const removeSelectedImage = (index: number) => {
                     <button className="text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-300">
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button className="text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-300">
-                      <Edit className="h-4 w-4" />
+                    <button 
+                    onClick={() => window.open(`https://testnet.explorer.perawallet.app/transactions/?transaction_list_address=${campaign.escrowAddress}`, '_blank')}
+                    className="text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-300">
+                      <ExternalLink className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
