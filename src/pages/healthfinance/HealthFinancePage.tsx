@@ -355,12 +355,12 @@ const handleDonate = async () => {
               Turn your crypto into care. Fund verified health projects across Africa with full transparency.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl">
+              <a href="#projects" className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl">
                 Browse Projects
-              </button>
-              <button className="border-2 border-primary-600 text-primary-600 hover:bg-primary-600 hover:text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl">
+              </a>
+              {/* <button className="border-2 border-primary-600 text-primary-600 hover:bg-primary-600 hover:text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl">
                 Fund a Clinic
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
@@ -382,7 +382,18 @@ const handleDonate = async () => {
             <div className="flex justify-center items-center py-12">
               <Loader className="h-8 w-8 text-primary-600 animate-spin" />
             </div>
-          ) : (
+          ) : campaigns.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-lg p-8 max-w-md mx-auto">
+                  <h3 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+                    No Campaigns Available
+                  </h3>
+                  <p className="text-neutral-600 dark:text-neutral-300">
+                    There are no active campaigns at the moment. Register your clinic to create a campaign.
+                  </p>
+                </div>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
               {campaigns.map((campaign, index) => (
                 <div 
@@ -571,14 +582,14 @@ const handleDonate = async () => {
       {/* Health Marketplace */}
       <section id="marketplace" className="py-20">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center mb-16">
+          {/* <div className="max-w-3xl mx-auto text-center mb-16">
             <h2 className="text-3xl font-bold text-neutral-900 dark:text-white mb-4">
               Health Packages You Can Fund
             </h2>
             <p className="text-lg text-neutral-600 dark:text-neutral-300">
               Pre-designed health packages that make immediate impact
             </p>
-          </div>
+          </div> */}
 
           {loading ? (
             <div className="flex justify-center items-center py-12">
@@ -731,7 +742,7 @@ const handleDonate = async () => {
                   </li>
                 </ul>
                 <Link
-                  to="/healthfinance/clinic-dashboard"
+                  to="//admin/login"
                   className="bg-secondary-600 hover:bg-secondary-700 text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 hover:shadow-lg inline-flex items-center"
                 >
                   Launch Your Campaign
@@ -885,11 +896,11 @@ const handleDonate = async () => {
             Join the movement to democratize healthcare funding across Africa through blockchain technology.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-white text-secondary-600 hover:bg-secondary-50 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl">
+            <a href="#projects" className="bg-white text-secondary-600 hover:bg-secondary-50 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl">
               Start Donating
-            </button>
+            </a>
             <Link
-              to="/healthfinance/clinic-dashboard"
+              to="/hospital/register"
               className="border-2 border-white text-white hover:bg-white hover:text-secondary-600 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
             >
               Register Your Clinic
